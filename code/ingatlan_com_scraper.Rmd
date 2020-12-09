@@ -1,0 +1,111 @@
+---
+title: "ingatlan.com scraping"
+author: "David Utassy"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rvest)
+library(moments)
+library(data.table)
+```
+
+## Overview
+
+#TODO: write introduction
+This is the output document of [**Project 1**](https://ceuedu-my.sharepoint.com/:x:/g/personal/orsosm_ceu_edu/ETc-Mf_JpbRPjSdH2t3d6ScB_z0xBrn8RmR4HtLx37_-xg?e=lDFYFj) for Web Srcaping in R. This project is created by David Utassy and its main purpose is to practice the basics of Web Scraping. The code scrapes [**www.jofogas.hu**](https://www.jofogas.hu/) with a given search term and the number of pages to scrape. 
+
+## Getting the links from one page
+
+```{r}
+# 'https://ingatlan.com/lista/elado+xiv-ker+lakas'
+
+get_links_from_page  <- function(my_url) {
+  print(my_url)
+  t <- read_html(my_url)
+  boxes <- t %>% 
+    html_nodes('.listing__card')
+  x <- boxes[[1]]
+  
+  boxes_df <- lapply(boxes, function(x){
+    t_list <- list()
+    t_list[['link']] <- paste("https://ingatlan.com/",x %>%html_nodes('a') %>% html_attr('href'), sep="")
+   # t_list[['link']] <- x %>% html_nodes('.subject') %>% html_attr('href')
+  
+    return(data.frame(t_list))  
+  })
+  
+  df <- rbindlist(boxes_df)
+  
+  toDelete <- seq(0, length(df$link), 2)
+  df <-  df[-toDelete, ]
+  
+  return(df)
+}
+
+df <-  get_links_from_page('https://ingatlan.com/lista/elado+xiv-ker+lakas')
+```
+
+## A definable funtion to srape according to given searchterm and given number of pages 
+
+```{r}
+get_pages <- function(number_of_pages_to_download, searchterm) {
+  # create links
+ links_to_get <- paste0('https://ingatlan.com/lista/',searchterm, '?page=', seq(1, number_of_pages_to_download))
+ ret_df <- rbindlist(lapply(links_to_get, get_links_from_page))
+  return(ret_df)
+}
+```
+
+``` {r, message=FALSE}
+links <- get_pages(20, 'elado+lakas+ujszeru+felujitott+jo-allapotu+xiv-ker')
+knitr::kable(df)
+```
+``` {r, message=FALSE}
+process_flats  <- function(my_link) {
+  print(my_link)
+  t <- read_html(my_link)
+  data_list <- list()
+  
+ tkeys <- t %>% html_nodes('.parameter-title') %>% html_text()
+ tvalue <- t %>% html_nodes('.parameter-value') %>% html_text()
+ if (length(tkeys) ==length(tvalue)) {
+   print('good base info data')
+   for (i in 1:length(tkeys)) {
+     data_list[[  tkeys[i]  ]] <- tvalue[i]
+   }
+ }
+    
+ tkeys <- t %>% html_nodes('td:nth-child(1)') %>% html_text()
+ tvalue <- t %>% html_nodes('td+ td') %>% html_text()
+ if (length(tkeys) ==length(tvalue)) {
+   print('good base info data')
+   for (i in 1:length(tkeys)) {
+     data_list[[  tkeys[i]  ]] <- tvalue[i]
+   }
+ }
+ 
+  return(data_list)
+}
+
+process_flats(links[1])
+
+links_list <- as.list(as.data.frame(t(links)))
+
+
+
+output_df <- rbindlist(lapply(links_list, process_flats), fill = T)
+write.csv(output_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data//raw/raw_400.csv')
+```
+
+
+
+``` {r, include=FALSE}
+
+write.csv(output_df, file = '/data/raw_400.csv')
+``` {r, message=FALSE}
