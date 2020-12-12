@@ -1,5 +1,5 @@
 ---
-title: "ingatlan.com scraping"
+title: "Predicting real estate prices"
 author: "David Utassy"
 date: "`r Sys.Date()`"
 output:
@@ -10,21 +10,41 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
 library(rvest)
 library(moments)
 library(data.table)
+require(scales)
+library(estimatr)
+library(texreg)
+library(ggthemes)
+library(ggplot2)
+library("ggpubr")
+theme_set(
+  theme_bw() +
+    theme(legend.position = "top")
+  )
+library(kableExtra)
 ```
+
+This is the output document of [**Project 2**](https://ceuedu-my.sharepoint.com/:x:/g/personal/orsosm_ceu_edu/ETc-Mf_JpbRPjSdH2t3d6ScB_z0xBrn8RmR4HtLx37_-xg?e=lDFYFj) for Web Srcaping in R. This project is created by David Utassy.
 
 ## Overview
 
-#TODO: write introduction
-This is the output document of [**Project 1**](https://ceuedu-my.sharepoint.com/:x:/g/personal/orsosm_ceu_edu/ETc-Mf_JpbRPjSdH2t3d6ScB_z0xBrn8RmR4HtLx37_-xg?e=lDFYFj) for Web Srcaping in R. This project is created by David Utassy and its main purpose is to practice the basics of Web Scraping. The code scrapes [**www.jofogas.hu**](https://www.jofogas.hu/) with a given search term and the number of pages to scrape. 
+The goal of this project to scrape different variables from the website [**www.ingatlan.com**](https://www.ingatlan.com), make some explanatory data analysis and try to predict the price of a custom flat with the given parameters. 
 
-## Getting the links from one page
+Currently this is just a very basic solution, but at the end of this markdown I will mention further possible improvements that I am planning to make in the future.
+
+## Process
+
+In this section I will conclude step-by-step the process of the project.
+
+### Getting the links from one page
+
+The following code snippet contains the a function that makes it possible to get the link of all the real estates on the page given in the argument as a URL.
 
 ```{r}
-# 'https://ingatlan.com/lista/elado+xiv-ker+lakas'
-
 get_links_from_page  <- function(my_url) {
   print(my_url)
   t <- read_html(my_url)
@@ -35,7 +55,6 @@ get_links_from_page  <- function(my_url) {
   boxes_df <- lapply(boxes, function(x){
     t_list <- list()
     t_list[['link']] <- paste("https://ingatlan.com/",x %>%html_nodes('a') %>% html_attr('href'), sep="")
-   # t_list[['link']] <- x %>% html_nodes('.subject') %>% html_attr('href')
   
     return(data.frame(t_list))  
   })
@@ -48,12 +67,13 @@ get_links_from_page  <- function(my_url) {
   return(df)
 }
 
-df <-  get_links_from_page('https://ingatlan.com/lista/elado+xiv-ker+lakas')
 ```
 
-## A definable funtion to srape according to given searchterm and given number of pages 
+### Scrape with the given searchterm the given number of pages
 
-```{r}
+In order to get a lot of real estates, we need to scrape several pages with an adjustable search term. The following function gets the number of we want to scrape and a searchterm in which we are able to filter for different kind of real estates.
+
+``` {r, message=FALSE}
 get_pages <- function(number_of_pages_to_download, searchterm) {
   # create links
  links_to_get <- paste0('https://ingatlan.com/lista/',searchterm, '?page=', seq(1, number_of_pages_to_download))
@@ -62,10 +82,9 @@ get_pages <- function(number_of_pages_to_download, searchterm) {
 }
 ```
 
-``` {r, message=FALSE}
-links <- get_pages(20, 'elado+lakas+ujszeru+felujitott+jo-allapotu+xiv-ker')
-knitr::kable(df)
-```
+### Get data from each and every real estate we have
+
+Using the function above we have a list of URLs that leads to the website of unique real estate on ingatlan.com. In order to get the date from this pages I implemented the following function. It scrapes 50 different variables for every advertisement, and returns into a dataframe.
 ``` {r, message=FALSE}
 process_flats  <- function(my_link) {
   print(my_link)
@@ -93,19 +112,227 @@ process_flats  <- function(my_link) {
   return(data_list)
 }
 
-process_flats(links[1])
 
-links_list <- as.list(as.data.frame(t(links)))
+##Use these function calls to scrape!
 
+#links <- get_pages(50, 'elado+lakas+ujszeru+felujitott+jo-allapotu+xiv-ker')
+#links_list <- as.list(as.data.frame(t(links)))
 
+#output_df <- rbindlist(lapply(links_list, process_flats), fill = T)
 
-output_df <- rbindlist(lapply(links_list, process_flats), fill = T)
-write.csv(output_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data//raw/raw_400.csv')
+#write.csv(output_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/raw/raw_400.csv')
 ```
 
+### Data Cleaning
+
+In order analyze the data we need to clean it, especially as we scraped values as text. As a first step for this assignment I keep only the very basic variables which most of the advertisement have. These variables are floorspace, number of rooms and price. In bullet point I conclude the cleaning steps that I have made:
+
+- read in raw data
+- drop not needed columns
+- rename columns
+- drop observations with missing values
+- extract meaningful quantitative variable from the text we scraped
+- write out clean data
+
+``` {r, message=FALSE, warning=FALSE}
+raw_df <- read.csv(file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/raw/raw_400.csv')
 
 
-``` {r, include=FALSE}
+#remove not needed columns
+keep_cols <- c("Alapterület", "Szobák.száma", "X.Hitelre.van.szükséged..Kalkulálj..")
+raw_df <- raw_df %>% select(keep_cols)
 
-write.csv(output_df, file = '/data/raw_400.csv')
+#rename columns
+raw_df <- raw_df %>% rename(
+    floorspace = Alapterület,
+    num_rooms = Szobák.száma,
+    price = X.Hitelre.van.szükséged..Kalkulálj..
+    )
+
+#drop observations with missing values
+raw_df <- raw_df[complete.cases(raw_df), ]
+                     
+
+#get meaningful numbers from text
+
+#floorspace
+raw_df <-  separate(raw_df, floorspace, " ", 
+                     into = c("floorspace"))
+
+#price
+raw_df <-  separate(raw_df, price, " ", 
+                     into = c("clean"))
+raw_df <-  separate(raw_df, clean, ",", 
+                     into = c("decimal", "remaining" ))
+
+raw_df[is.na(raw_df)] <- 0
+raw_df$price <- as.numeric(raw_df$decimal) + as.numeric(raw_df$remaining)/10
+raw_df <- raw_df %>% select(-c("decimal", "remaining"))
+
+#number of rooms
+raw_df<-  separate(raw_df, num_rooms, " fél", 
+                     into = c("clean"))
+raw_df <- raw_df %>% mutate(across(where(is.character), str_remove_all, pattern = fixed(" ")))
+raw_df <-  separate(raw_df, clean, "\\+", 
+                     into = c("num_whole_rooms","num_half_rooms"))
+raw_df[is.na(raw_df)] <- 0
+raw_df$num_rooms <- as.numeric(raw_df$num_whole_rooms) + as.numeric(raw_df$num_half_rooms)/2
+
+clean_df <-  raw_df
+
+write.csv(clean_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/clean/clean_400.csv')
+```
+
+### Explanatory Data Analysis
+
+For an explanatory data analysis I plotted the histogram and made a summary of the variables I have. From the following table it can be seen, that the variables are skewed but in an acceptable way. I also experimented with the ln() transformation of the variables, but the improvement does not worth the modification.
+
+``` {r, message=FALSE, echo=FALSE, warning=FALSE}
+
+
+df <- read.csv(file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/clean/clean_400.csv')
+
+df <- df %>% mutate( ln_price = log( price ),
+                     ln_num_rooms = log( num_rooms ),
+                     ln_floorspace= log( floorspace ))
+
+p1<- ggplot( df , aes( x = num_rooms ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 0.5, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 0.5, color = 'black', fill="#56B4E9") +
+    labs(x='Number of rooms',y='Density')
+
+p2<- ggplot( df , aes( x = floorspace ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 5, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 5, color = 'black', fill="#FF6666") +
+    labs(x='Floorspace [m2]',y='Density')
+
+p22<- ggplot( df , aes( x = ln_floorspace ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 0.1, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 0.1, color = 'black', fill="#FF6666") +
+    labs(x='Floorspace [m2] (ln scale)',y='Density')
+
+p3<- ggplot( df , aes( x = price ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 5, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 5, color = 'black', fill="#56B4E9") +
+    labs(x='Price [million HUF] (ln scale)',y='Density')
+
+p32<- ggplot( df , aes( x = ln_price ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 0.1, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 0.1, color = 'black', fill="#56B4E9") +
+    labs(x='Price [million HUF] (ln scale)',y='Density')
+
+ggarrange(p1, ggarrange(p2, p22, ncol = 2), ggarrange(p3, p32, ncol = 2), nrow =3)
+
+```
+``` {r, message=FALSE, echo=FALSE, warning=FALSE}
+price_sum <- df %>% summarise(
+  variable = 'Price [million HUF]',
+  mean     = mean(price),
+  median   = median(price),
+  std      = sd(price),
+  iq_range = IQR(price), 
+  min      = min(price),
+  max      = max(price),
+  skew     = skewness(price),
+  numObs   = sum( !is.na( price ) ) )
+
+num_rooms_sum <- df %>% summarise(
+  variable = 'Number of rooms',
+  mean     = mean(num_rooms),
+  median   = median(num_rooms),
+  std      = sd(num_rooms),
+  iq_range = IQR(num_rooms), 
+  min      = min(num_rooms),
+  max      = max(num_rooms),
+  skew     = skewness(num_rooms),
+  numObs   = sum( !is.na( num_rooms ) ) )
+
+floorspace_sum <- df %>% summarise(
+  variable = 'Floorspace [m2]',
+  mean     = mean(floorspace),
+  median   = median(floorspace),
+  std      = sd(floorspace),
+  iq_range = IQR(floorspace), 
+  min      = min(floorspace),
+  max      = max(floorspace),
+  skew     = skewness(floorspace),
+  numObs   = sum( !is.na( floorspace ) ) )
+
+df_summary <- price_sum %>% add_row( floorspace_sum ) %>% add_row( num_rooms_sum ) 
+kbl(df_summary, digits = 2) %>% kable_styling(bootstrap_options = "striped", full_width = F, position = "center")
+```
+
+### Creating a model
+
+I have tried 4 different models on my dataset in order to predict price. 
+
+
+Model 1: $price^{E}$ = $\alpha$ + $\beta$$floorspace$
+
+Model 2: $price^{E}$ = $\alpha$ + $\beta_{1}$$floorspace$ + $\beta_{2}$${floorspace}^{2}$
+
+Model 3: $price^{E}$ = $\alpha$ + $\beta_{1}$$floorspace$ + $\beta_{2}$${floorspace}^{2}$ + $\beta_{3}$$number_of_rooms$
+
+Model 4: $price^{E}$ = $\alpha$ + $\beta_{1}$$floorspace$ + $\beta_{2}$${floorspace}^{2}$ + $\beta_{3}$$number_of_rooms$ + $\beta_{4}$${number_of_rooms}^{2}$
+
+I made the evaluation of them by plotting them (if possible) and with a regression summary table. From the two plots below it can be seen that the simple linear regression is already a good model, but the quadratic model looks like a bit better. 
+
+
+``` {r, message=FALSE, echo=FALSE, warning=FALSE}
+df <- df %>% mutate( num_rooms_sq = num_rooms^2,
+                     floorspace_sq = floorspace^2)
+
+reg1 <- lm_robust( price ~ floorspace , data = df , se_type = "HC2" )
+reg1_plot <- ggplot( data = df, aes( x = floorspace, y = price ) ) + 
+  geom_point( color='blue') +
+  labs(x = "Floor space [m2]",y = "Price [millions HUF]")  +
+  geom_smooth( method = lm , color = 'red' )
+
+reg2 <- lm_robust( price ~ floorspace + floorspace_sq , data = df , se_type = "HC2" )
+reg2_plot <- ggplot( data = df, aes( x = floorspace, y = price ) ) + 
+  geom_point( color='blue') +
+  labs(x = "Floor space [m2]",y = "Price [millions HUF]")  +
+  geom_smooth( formula = y ~ poly(x,2) , method = lm , color = 'red' )
+
+reg3 <- lm_robust( price ~ floorspace + floorspace_sq + num_rooms , data = df , se_type = "HC2" )
+
+reg4 <- lm_robust( price ~ floorspace + floorspace_sq + + num_rooms + num_rooms_sq , data = df , se_type = "HC2" )
+
+ggarrange(reg1_plot, reg2_plot, ncol = 2)
+```
+
+```{r, results = 'asis', echo = FALSE}
+ htmlreg( list(reg1 , reg2 , reg3 , reg4)) #only include when knitting html
+```
+
+According to the regression summary table I have decided to use Model 1. as according to R2 the following models are just sightly better, therefore we should enjoy the straightforward interpretation of Model 1.
+
+### Prediction
+
+For the prediction I used Model 1. Therefore I was able to implement a function that takes in a floorspace as an argument and returns the predicted price of the real estate.
+Please note that out model, therefore prediction is influenced by the input dataset we have. In our case I filtered for already used flats for sale in the 14. district of Budapest. For prediction interval, and external validity further analysis needed!
+
 ``` {r, message=FALSE}
+#Prediction lets use Model1
+predict_price <- function(floorspace) {
+  return(reg1$coefficients[1] + floorspace*reg1$coefficients[2])
+}
+#If we have a flat which is 55m2 in the 14. district
+predict_price(55)
+
+```
+
+Our predictor function returned the following price (in millions [HUF]) for a flat that has 55 m2 floorspace.
+
+## Further improvement possibilities.
+
+Because the focus of this assignment and lack of time there are lot of improvement possibilities left in this project:
+
+- Use more variable from the scraped data (only 3 used out of almost 50)
+- Scrape the summary part for every real estate, make sentiment analysis and entity recognition for more variables.
+- Use image recognition to identify the quality of the real estate from the pictures and add more variables
+- Scrape all the data from Budapest
+- Build an automated scraper infrastructure that scrapes the industry regularly and builds dashboard from it
+
+## Summary
+This project managed to scrape and analyze almost 400 flats for sale in Budapest, build a model on it and predict price for custom flats. As it has been already mentioned this project opened the gate for many further improvement which I am planing to do in the future.
