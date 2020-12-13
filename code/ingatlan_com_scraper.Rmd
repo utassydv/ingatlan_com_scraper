@@ -120,7 +120,7 @@ process_flats  <- function(my_link) {
 
 #output_df <- rbindlist(lapply(links_list, process_flats), fill = T)
 
-#write.csv(output_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/raw/raw_400.csv')
+#write.csv(output_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/raw/raw_1000.csv')
 ```
 
 ### Data Cleaning
@@ -135,7 +135,7 @@ In order analyze the data we need to clean it, especially as we scraped values a
 - write out clean data
 
 ``` {r, message=FALSE, warning=FALSE}
-raw_df <- read.csv(file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/raw/raw_400.csv')
+raw_df <- read.csv(file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/raw/raw_1000.csv')
 
 
 #remove not needed columns
@@ -180,7 +180,7 @@ raw_df$num_rooms <- as.numeric(raw_df$num_whole_rooms) + as.numeric(raw_df$num_h
 
 clean_df <-  raw_df
 
-write.csv(clean_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/clean/clean_400.csv')
+write.csv(clean_df, file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/clean/clean_1000.csv')
 ```
 
 ### Explanatory Data Analysis
@@ -190,7 +190,7 @@ For an explanatory data analysis I plotted the histogram and made a summary of t
 ``` {r, message=FALSE, echo=FALSE, warning=FALSE}
 
 
-df <- read.csv(file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/clean/clean_400.csv')
+df <- read.csv(file = '/Users/utassydv/Documents/workspaces/CEU/my_repos/ingatlan_com_scraper/data/clean/clean_1000.csv')
 
 df <- df %>% mutate( ln_price = log( price ),
                      ln_num_rooms = log( num_rooms ),
@@ -333,6 +333,8 @@ Because the focus of this assignment and lack of time there are lot of improveme
 - Use image recognition to identify the quality of the real estate from the pictures and add more variables
 - Scrape all the data from Budapest
 - Build an automated scraper infrastructure that scrapes the industry regularly and builds dashboard from it
+- Get geolocation, use it to produce distance to city center variable
+- Get nearest public transportation stations
 
 ## Summary
-This project managed to scrape and analyze almost 400 flats for sale in Budapest, build a model on it and predict price for custom flats. As it has been already mentioned this project opened the gate for many further improvement which I am planing to do in the future.
+This project managed to scrape and analyze almost 1000 flats for sale in Budapest, build a model on it and predict price for custom flats. As it has been already mentioned this project opened the gate for many further improvement which I am planing to do in the future.
